@@ -27,4 +27,5 @@ dict = {
 print(dict)
 
 with open(testfile,'a',encoding="utf-8") as outfile:
-    json.dump(dict,outfile,indent=4)
+    # json.dump(dict,outfile,indent=4)
+    json.dump(dict,outfile,indent=2)
