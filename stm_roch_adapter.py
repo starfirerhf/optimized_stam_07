@@ -128,12 +128,15 @@ unknown_list = []
 
 # Experimental Variables #############################################################################################
 # minimum number of tweets - at 132, this sets a minimum of 120 training tweets and allows 10% hold out for testing
-threshold = 120            # training set size
-threshold_check = 0       # counter to compare to threshold
-random_seed = 10
-# number of candidates considered - for scaling out - can remove if determined computationally feasible
-num_candidates = 10        # number of candidate authors
-tst_cnt = 0               # counts number of unknown messages
+threshold = 120             # training set size
+random_seed = 10            # random seed, set to test # in test plan
+num_candidates = 10         # number of candidate authors
+unk_size = 4               # number of tweets in unknown file
+# Counters and string builders
+threshold_check = 0        # counter to compare to threshold
+tst_cnt = 0                # counts number of unknown messages (to differentiate unknown file numbers)
+unk_count = 0              # counts number of unknown messages added to one file in the test set
+combined_unk = ''          # string for combining unknown tweets to one string
 
 # empty target directory
 delete_files(outdir)
@@ -147,40 +150,41 @@ valid_candidates = get_authors_over_threshold(authors, tweet_table, threshold, n
 # print(valid_candidates)
 # get tweets for training profile
 for candidate in valid_candidates:
-    # print(candidate)
+    # Get number of tweets equal to the training set size, plus the number of tweets in each unknown file
     tweet_tups = random_tweets.get_random_tweets(sqlite_file, tweet_table, author_table,\
-                                                 candidate, threshold + 1, random_seed)
+                                                 candidate, threshold + unk_size, random_seed)
     # dictionary for the candidate author - primarily for json format
     c_list = {}
     c_list["author-name"] = candidate
     author_list.append(c_list)
     print('\n' + str(threshold) + ' Tweets from:' + candidate)
-    # print(tweet_tups)
     for tweet_tup in tweet_tups:
         for tweet in tweet_tup:
             truth_line_dict = {}
-            # write 60 messages to author folder for training
+            # write training set threshold number of tweets to author folder for training
             if threshold_check < threshold:
                 print("Tweet:" + str(threshold_check))
                 print(tweet.rstrip())
                 write_training(tweet.rstrip(), threshold_check, candidate, outdir)
                 threshold_check += 1
-            # write 1 message per candidate to unknown folder for testing and ground-truth
-            elif threshold_check == threshold:
-                u_list = {}
-                u_list["unknown-text"] = "unknown" + str(tst_cnt).rjust(5, '0') + ".txt"
-                unknown_list.append(u_list)
-                truth_line_dict["true-author"] = candidate
-                truth_line_dict["unknown-text"] = "unknown" + str(tst_cnt).rjust(5, '0') + ".txt"
-                truth.append(truth_line_dict)
+            # write 1 test file per candidate to unknown folder for testing and ground-truth
+            elif threshold_check >= threshold and unk_count < unk_size:
                 print("Tweet:" + str(threshold_check))
                 print(tweet.rstrip())
-                write_testing(tweet.rstrip(), tst_cnt, candidate, os.path.join(outdir,"unknown"))
+                combined_unk += tweet
                 threshold_check += 1
-                tst_cnt += 1
-            else:
-                break
+                unk_count += 1
+    truth_line_dict["true-author"] = candidate
+    truth_line_dict["unknown-text"] = "unknown" + str(tst_cnt).rjust(5, '0') + ".txt"
+    truth.append(truth_line_dict)
+    tst_cnt += 1
+    write_testing(combined_unk, tst_cnt, candidate, os.path.join(outdir, "unknown"))
+    u_list = {}
+    u_list["unknown-text"] = "unknown" + str(tst_cnt).rjust(5, '0') + ".txt"
+    unknown_list.append(u_list)
     threshold_check = 0
+    unk_count = 0
+    combined_unk = ''
 
 meta = build_meta.build_meta_dict(author_list, unknown_list)
 with open(os.path.join(outdir, metafile),'a',encoding="utf-8") as m_outfile:
